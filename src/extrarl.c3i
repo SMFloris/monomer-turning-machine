@@ -1,0 +1,6 @@
+module extrarl;
+import raylib5;
+
+fn void drawSplineCatmullRom(rl::Vector2 *points, int pointCount, float thick, rl::Color color) @extern("DrawSplineCatmullRom");
+fn void drawSplineBezierCubic(Vector2 *points, int pointCount, float thick, Color color) @extern("DrawSplineBezierCubic");
+fn void drawSplineBezierQuadratic(Vector2 *points, int pointCount, float thick, Color color) @extern("DrawSplineBezierQuadratic");
