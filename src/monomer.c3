@@ -71,6 +71,10 @@ fn Monomer* newMonomer(MonomerPos pos, int state) {
   return mem::new(Monomer, {pos, state});
 }
 
+fn void Monomer.print(Monomer *self) {
+  io::printf("%d %d\n", self.pos.x, self.pos.y);
+}
+
 fn MonomerPos Monomer.getTranslatedPos(Monomer *self, int targetState = 0) {
   MonomerTranslation t = getTranslation(targetState);
   return MonomerPos {self.pos.x + t.x, self.pos.y + t.y };
@@ -125,6 +129,19 @@ fn void MonomerLink.bumpIfNextBlocksCurrent(MonomerLink *self) {
     if(tries == 3) {
       break;
     }
+  }
+}
+
+fn void MonomerLink.printConfiguration(MonomerLink *self) {
+  int i = 1;
+  MonomerLink *l = self;
+  while(l.next) {
+    io::printf("%d ", i);
+    l.m.print();
+    io::printf("%d ", i+1);
+    l.next.m.print();
+    l = l.next;
+    i++;
   }
 }
 
