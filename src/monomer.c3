@@ -3,63 +3,48 @@ module monomer;
 import std::math;
 import std::io;
 
-int gapSize = 50;
+bool chainBlockRule = true;
+double gapSize = 50;
+int totalMonomerStates = 24;
 
 struct MonomerTranslation {
-  int x;
-  int y;
+  double x;
+  double y;
 }
 
 enum MonomerTranslationDirection: int (MonomerTranslation t) {
-  RIGHT = {2, 0},
-  RIGHT_UP = {1, -2},
-  LEFT_UP = {-1, -2},
-  LEFT = {-2, 0},
-  LEFT_DOWN = {-1, 2},
-  RIGHT_DOWN = {1, 2},
   NONE = {0, 0}
 }
 
 fn MonomerTranslation getTranslation(int state) {
   if (state < 0) {
-    state = (state + 6) % 6;
+    state = (state + totalMonomerStates) % totalMonomerStates;
   } else {
-    state = state % 6;
+    state = state % totalMonomerStates;
   }
   MonomerTranslation t = MonomerTranslationDirection.NONE.t;
-  switch(state) {
-    case 0:  {
-      t = MonomerTranslationDirection.RIGHT.t;
-      break;
-    }
-    case 1: {
-      t = MonomerTranslationDirection.RIGHT_UP.t;
-      break;
-    }
-    case 2: {
-      t = MonomerTranslationDirection.LEFT_UP.t;
-      break;
-    }
-    case 3: {
-      t = MonomerTranslationDirection.LEFT.t;
-      break;
-    }
-    case 4: {
-      t = MonomerTranslationDirection.LEFT_DOWN.t;
-      break;
-    }
-    case 5: {
-      t = MonomerTranslationDirection.RIGHT_DOWN.t;
-      break;
-    }
-  }
+  float targetAngle = (float) (2 * math::PI / (float) totalMonomerStates * (float) state);
+  float y = math::sin(targetAngle);
+  float x = math::cos(targetAngle);
 
-  return MonomerTranslation { t.x * gapSize, t.y * gapSize };
+  return MonomerTranslation { x * gapSize, y * gapSize };
 }
 
 struct MonomerPos {
-  int x;
-  int y;
+  double x;
+  double y;
+}
+
+fn bool MonomerPos.isSame(MonomerPos *self, MonomerPos *other) {
+  return self.x == other.x && self.y == other.y;
+}
+
+fn double MonomerPos.dist(MonomerPos *self, MonomerPos *other) {
+  return math::sqrt((self.x - other.x)*(self.x - other.x) + (self.y - other.y)*(self.y - other.y));
+}
+
+fn void MonomerPos.print(MonomerPos *self) {
+  io::printf("%d %d\n", self.x, self.y);
 }
 
 struct Monomer {
@@ -88,15 +73,43 @@ fn MonomerPos Monomer.getInitialTranslatedPos(Monomer *self) {
 struct MonomerLink {
   Monomer *m;
   int translations;
+  bool isBlocked;
   MonomerLink *prev;
   MonomerLink *next;
 }
 
 fn MonomerLink* newMonomerLink(MonomerLink* prev, Monomer* monomer, MonomerLink* next) {
-  return mem::new(MonomerLink, {monomer, 0, prev, next});
+  return mem::new(MonomerLink, {monomer, 0, false, prev, next});
 }
 
-fn void MonomerLink.updateLinkPositions(MonomerLink *self, MonomerPos *newPos = null) {
+fn bool MonomerLink.isTooNearPrevious(MonomerLink *self, MonomerPos *pos = null) {
+  if(!pos) {
+    return false;
+  }
+
+  if(!self.prev) {
+    return false;
+  }
+
+  MonomerLink *p = self.prev;
+  int i = 1;
+  int maxPrevToCheck = (int) math::floor((double)totalMonomerStates * 0.8);
+  //int maxPrevToCheck = 1000;
+  pos.print();
+  while(p && i < maxPrevToCheck) {
+    double dist = pos.dist(&p.m.pos);
+    p.m.print();
+    io::printf("%f\n", dist);
+    if (dist < gapSize/2+1) {
+      return true;
+    }
+    p = p.prev;
+    i += 1;
+  }
+  return false;
+}
+
+fn void MonomerLink.updateNextLinkPositions(MonomerLink *self, MonomerPos *newPos = null) {
   if(newPos) {
     self.m.pos = *newPos;
   }
@@ -106,30 +119,7 @@ fn void MonomerLink.updateLinkPositions(MonomerLink *self, MonomerPos *newPos = 
   }
 
   MonomerPos nextStartingPos = self.m.getTranslatedPos(self.translations);
-  self.next.updateLinkPositions(&nextStartingPos);
-}
-
-fn void MonomerLink.bumpIfNextBlocksCurrent(MonomerLink *self) {
-  if(!self.next) {
-    return;
-  }
-
-  int tries = 0;
-  while(
-    (self.m.pos.x == self.next.m.pos.x && self.m.pos.y == self.next.m.pos.y)
-    || (self.prev && self.prev.m.pos.x == self.next.m.pos.x && self.prev.m.pos.y == self.next.m.pos.y)
-  ) {
-    if(self.translations < 0) {
-      self.translations -= 1;
-    } else {
-      self.translations += 1;
-    }
-    self.updateLinkPositions();
-    tries += 1;
-    if(tries == 3) {
-      break;
-    }
-  }
+  self.next.updateNextLinkPositions(&nextStartingPos);
 }
 
 fn void MonomerLink.printConfiguration(MonomerLink *self) {
@@ -145,6 +135,20 @@ fn void MonomerLink.printConfiguration(MonomerLink *self) {
   }
 }
 
+fn bool MonomerLink.turnNextLink(MonomerLink *self, int direction) {
+  if(!self.next) {
+    return true;
+  }
+
+  MonomerPos nextStartingPos = self.m.getTranslatedPos(self.translations + direction);
+  if (chainBlockRule && self.next.isTooNearPrevious(&nextStartingPos)) {
+    return false;
+  }
+
+  self.next.updateNextLinkPositions(&nextStartingPos);
+  return true;
+}
+
 fn int MonomerLink.turnConfiguration(MonomerLink *self, bool turnByTurn = true) {
   if(!self.next) {
     return 0;
@@ -155,32 +159,38 @@ fn int MonomerLink.turnConfiguration(MonomerLink *self, bool turnByTurn = true) 
   bool alreadyTurnedOnce = false;
   while(l.next) {
     int s = l.m.state;
+    if (l.isBlocked) {
+      l = l.next;
+      continue;
+    }
     while(s && !alreadyTurnedOnce) {
       int translationDir = 1;
       if (s > 0) {
-        s = s - 1;
-        translationDir = 1;
-      }
-      if (s < 0) {
-        s = s + 1;
         translationDir = -1;
       }
-      l.translations += translationDir;
+      if (s < 0) {
+        translationDir = 1;
+      }
+      bool nextIsNotBlocked = false;
+      nextIsNotBlocked = l.turnNextLink(translationDir);
+      if(!nextIsNotBlocked && s + translationDir == 0) {
+        if (math::abs(l.translations) > 2 * totalMonomerStates) {
+          l.isBlocked = true;
+          s = 0;
+        }
+        l.translations += translationDir;
+      } else {
+        s += translationDir;
+        l.translations += translationDir;
+      }
+
       l.m.state = s;
 
-      if (turnByTurn) {
-        l.updateLinkPositions();
-        l.bumpIfNextBlocksCurrent();
+      if(turnByTurn) {
         alreadyTurnedOnce = true;
-        break;
       }
     }
     turnsRemaining += math::abs(s);
-    if(turnByTurn && alreadyTurnedOnce) {
-      break;
-    }
-    l.updateLinkPositions();
-    l.bumpIfNextBlocksCurrent();
     l = l.next;
   }
 

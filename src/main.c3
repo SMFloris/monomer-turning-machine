@@ -15,19 +15,28 @@ int initialY = 500;
 
 double tk;
 
-float timeToChange = 0.1;
+float timeToChange = 1;
 int monomerLength = 5;
-int modeMonomer = -1;
-int modeInstant = 1;
+int modeMonomer = 1;
+int modeInstant = -1;
 
 math::random::SimpleRandom rng;
 
 monomer::MonomerLink *monomerConfiguration;
 
-fn void initMonomerConfiguration() {
+fn void initMonomerConfiguration(bool random) {
   int *monomerStates = mem::new_array(int, monomerLength);
   for(int i=0; i < monomerLength; i++) {
-    monomerStates[i] = (int) math::floor(rng.next_int() % 13 - 6);
+    if (random) {
+      if (i == 0) {
+        monomerStates[i] = (math::abs(rng.next_int()) % (monomer::totalMonomerStates * 2 + 1)) - monomer::totalMonomerStates;
+      } else {
+        int maxDegreesEachTurn = (int) ((double) monomer::totalMonomerStates * 0.25);
+        monomerStates[i] = monomerStates[i-1] + (math::abs(rng.next_int()) % (maxDegreesEachTurn * 2 + 1)) - maxDegreesEachTurn;
+      }
+    } else {
+      monomerStates[i] = i;
+    }
   }
 
   monomerConfiguration = monomer::initLink(monomerStates, monomerLength, initialX, initialY);
@@ -88,9 +97,16 @@ fn int main(String[] args)
   if(try monomers) {
     monomerLength = monomers;
   }
+
   String! seed = getStringArgument(args, "--seed");
   if(try seed) {
     rng.set_seed(seed);
+  }
+
+  bool randomGeneration = true;
+  int! random = getIntArgument(args, "--random");
+  if(try random) {
+    randomGeneration = random > 0;
   }
 
   bool generateAndExit = false;
@@ -99,7 +115,7 @@ fn int main(String[] args)
     generateAndExit = programMode == "generate";
   }
 
-  initMonomerConfiguration();
+  initMonomerConfiguration(randomGeneration);
   if(generateAndExit) {
       monomerConfiguration.turnConfiguration(false);
       monomerConfiguration.printConfiguration();
@@ -111,7 +127,7 @@ fn int main(String[] args)
 	rl::initWindow(screenWidth, screenHeight, "Raylib in C3!");
 
   rl::Camera2D camera;
-  camera.target = rl::Vector2{ monomerConfiguration.m.pos.x, monomerConfiguration.m.pos.y };
+  camera.target = rl::Vector2{ (int) monomerConfiguration.m.pos.x, (int) monomerConfiguration.m.pos.y };
   camera.offset = rl::Vector2{ screenWidth/2.0f, screenHeight/2.0f };
   camera.rotation = 0.0f;
   camera.zoom = 1.0f;
@@ -158,18 +174,18 @@ fn int main(String[] args)
     } 
 
     if (rl::isKeyReleased(rl::KEY_R)) {
-      initMonomerConfiguration();
+      initMonomerConfiguration(randomGeneration);
       resetKeyPressed();
     }
 
     if (isKeyPressed(rl::KEY_A)) {
       monomerLength -= 1;
-      initMonomerConfiguration();
+      initMonomerConfiguration(randomGeneration);
       resetKeyPressed();
     } 
     else if (isKeyPressed(rl::KEY_D)) {
       monomerLength += 1;
-      initMonomerConfiguration();
+      initMonomerConfiguration(randomGeneration);
       resetKeyPressed();
     }
     monomerLength = math::clamp(monomerLength, 3, 100);
@@ -224,7 +240,7 @@ fn void drawMonomerLines(MonomerLink *l) {
   rl::Vector2 *v = mem::new_array(rl::Vector2, monomerLength);
   int i = 0;
   while(c != null) {
-    v[i] = Vector2 { c.m.pos.x, c.m.pos.y };
+    v[i] = Vector2 { (int)c.m.pos.x, (int)c.m.pos.y };
     i += 1;
     c = c.next;
   }
@@ -245,7 +261,11 @@ fn void drawMonomerLink(MonomerLink *start, MonomerLink *end) {
     return;
   }
 
-  rl::drawLineEx({start.m.pos.x, start.m.pos.y}, {end.m.pos.x, end.m.pos.y}, 10, rl::BLACK);
+  rl::Color linkColor = rl::BLACK;
+  if (end.isBlocked) {
+    linkColor = rl::RED;
+  }
+  rl::drawLineEx({(int)start.m.pos.x, (int)start.m.pos.y}, {(int)end.m.pos.x, (int)end.m.pos.y}, 10, linkColor);
 }
 
 fn void drawMonomer(Monomer *m) {
@@ -258,6 +278,6 @@ fn void drawMonomer(Monomer *m) {
       case 4: monomerColor = rl::BLUE;
       case 5: monomerColor = rl::DARKBLUE;
     }
-    rl::drawCircle(m.pos.x, m.pos.y, 15, monomerColor);
-    rl::drawText(rl::textFormat(" %d ", m.state), m.pos.x - 7, m.pos.y - 7, 15, rl::BLACK);
+    rl::drawCircle((int)m.pos.x, (int)m.pos.y, 15, monomerColor);
+    rl::drawText(rl::textFormat(" %d ", m.state), (int)m.pos.x - 7, (int)m.pos.y - 7, 15, rl::BLACK);
 }
