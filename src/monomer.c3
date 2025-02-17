@@ -57,7 +57,7 @@ fn Monomer* newMonomer(MonomerPos pos, int state) {
 }
 
 fn void Monomer.print(Monomer *self) {
-  io::printf("%d %d\n", self.pos.x, self.pos.y);
+  io::printf("%f %f\n", self.pos.x, self.pos.y);
 }
 
 fn MonomerPos Monomer.getTranslatedPos(Monomer *self, int targetState = 0) {
@@ -95,11 +95,8 @@ fn bool MonomerLink.isTooNearPrevious(MonomerLink *self, MonomerPos *pos = null)
   int i = 1;
   int maxPrevToCheck = (int) math::floor((double)totalMonomerStates * 0.8);
   //int maxPrevToCheck = 1000;
-  pos.print();
   while(p && i < maxPrevToCheck) {
     double dist = pos.dist(&p.m.pos);
-    p.m.print();
-    io::printf("%f\n", dist);
     if (dist < gapSize/2+1) {
       return true;
     }
@@ -125,11 +122,9 @@ fn void MonomerLink.updateNextLinkPositions(MonomerLink *self, MonomerPos *newPo
 fn void MonomerLink.printConfiguration(MonomerLink *self) {
   int i = 1;
   MonomerLink *l = self;
-  while(l.next) {
+  while(l) {
     io::printf("%d ", i);
     l.m.print();
-    io::printf("%d ", i+1);
-    l.next.m.print();
     l = l.next;
     i++;
   }
